@@ -275,6 +275,7 @@ export default function App() {
   const [bodyweight, setBodyweight] = useState({ value:"", notes:"" });
   const [workout, setWorkout] = useState({ type:"", duration:"", intensity:5, notes:"", sets:{} });
   const [meditation, setMeditation] = useState({ sessions: [] });
+  const [cannabis, setCannabis] = useState({ sessions: [] });
   const [newMedSession, setNewMedSession] = useState({ style:"Mindfulness", duration:"" });
   const [newSession, setNewSession] = useState({ method:"Vape", grams:"" });
 
