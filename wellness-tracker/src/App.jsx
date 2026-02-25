@@ -194,7 +194,10 @@ function computeReadiness(data) {
   let s = { sleep: 0, workout: 0, meditation: 0 };
   if (data.sleep?.hours)      s.sleep      = Math.min(100, Math.round((parseFloat(data.sleep.hours)        / 8)  * 100));
   if (data.workout?.duration) s.workout    = Math.min(100, Math.round((parseInt(data.workout.duration)     / 60) * 100));
-  if (data.meditation?.duration) s.meditation = Math.min(100, Math.round((parseInt(data.meditation.duration) / 20) * 100));
+  if (data.meditation?.sessions?.length) {
+    const totalMin = data.meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0);
+    s.meditation = Math.min(100, Math.round((totalMin / 20) * 100));
+  }
   return { overall: Math.round((s.sleep + s.workout + s.meditation) / 3), ...s };
 }
 
@@ -271,8 +274,8 @@ export default function App() {
   const [sleep, setSleep] = useState({ hours:"", quality:"", timeToSleep:"", deepSleep:"", remSleep:"", restingHR:"", hrv:"", notes:"" });
   const [bodyweight, setBodyweight] = useState({ value:"", notes:"" });
   const [workout, setWorkout] = useState({ type:"", duration:"", intensity:5, notes:"", sets:{} });
-  const [meditation, setMeditation] = useState({ duration:"", style:"", notes:"" });
-  const [cannabis, setCannabis] = useState({ sessions: [] });
+  const [meditation, setMeditation] = useState({ sessions: [] });
+  const [newMedSession, setNewMedSession] = useState({ style:"Mindfulness", duration:"" });
   const [newSession, setNewSession] = useState({ method:"Vape", grams:"" });
 
   useEffect(() => {
@@ -338,10 +341,9 @@ TODAY (${getTodayKey()}):
 - Sleep: ${sleep.hours}h, Deep: ${sleep.deepSleep||"?"}h, REM: ${sleep.remSleep||"?"}h, Time to sleep: ${sleep.timeToSleep||"?"}min, RHR: ${sleep.restingHR||"?"}bpm, HRV: ${sleep.hrv||"?"}ms, Eight Sleep Score: ${sleep.quality||"?"}/100${sleep.notes?`, Notes: ${sleep.notes}`:""}
 - Bodyweight: ${bodyweight.value?`${bodyweight.value} ${bwUnit}`:"not logged"}${bodyweight.notes?`, Notes: ${bodyweight.notes}`:""}
 - Workout: ${workout.type||"none"}, ${workout.duration}min, Intensity: ${workout.intensity}/10${workout.notes?`, Notes: ${workout.notes}`:""}
-- Meditation: ${meditation.duration}min ${meditation.style}${meditation.notes?`, Notes: ${meditation.notes}`:""}
-
+- Meditation: ${meditation.sessions?.length ? `${meditation.sessions.length} session(s), ${meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0)}min total (${meditation.sessions.map(s=>`${s.duration}min ${s.style}`).join(", ")})` : "none"}
 HISTORY (last ${hist7.length} days):
-${hist7.map(e=>`${e.date}: sleep ${e.sleep?.hours}h (score ${e.sleep?.quality||"?"}/100, HRV ${e.sleep?.hrv||"?"}ms, RHR ${e.sleep?.restingHR||"?"}bpm), bw ${e.bodyweight?.value||"?"}${bwUnit}, workout ${e.workout?.type} ${e.workout?.duration}min, meditation ${e.meditation?.duration}min`).join("\n")||"No history yet"}
+${hist7.map(e=>`${e.date}: sleep ${e.sleep?.hours}h (score ${e.sleep?.quality||"?"}/100, HRV ${e.sleep?.hrv||"?"}ms, RHR ${e.sleep?.restingHR||"?"}bpm), bw ${e.bodyweight?.value||"?"}${bwUnit}, workout ${e.workout?.type} ${e.workout?.duration}min, meditation ${e.meditation?.sessions?.reduce((t,s)=>t+(parseInt(s.duration)||0),0)||0}min`).join("\n")||"No history yet"}
 
 Respond ONLY with valid JSON (no markdown):
 {"readiness":{"score":number,"label":"Optimal/Good/Moderate/Low/Rest Day","summary":"1-2 sentences"},"tips":[{"icon":"emoji","category":"string","text":"specific tip with numbers"}],"patterns":"2-3 sentences","tomorrow":"1-2 sentences"}`;
@@ -406,7 +408,7 @@ Respond ONLY with valid JSON (no markdown):
   ], [trendDays, bwUnit]);
 
   const workoutBars    = useMemo(() => trendDays.map(([date,d])=>({ label:date.slice(5), value:d.workout?.duration?parseInt(d.workout.duration):0 })), [trendDays]);
-  const meditationBars = useMemo(() => trendDays.map(([date,d])=>({ label:date.slice(5), value:d.meditation?.duration?parseInt(d.meditation.duration):0 })), [trendDays]);
+  const meditationBars = useMemo(() => trendDays.map(([date,d])=>({ label:date.slice(5), value: d.meditation?.sessions?.reduce((t,s)=>t+(parseInt(s.duration)||0),0)||0 })), [trendDays]);
 
   const allExercises = useMemo(() => {
     const s = new Set();
@@ -479,7 +481,7 @@ Respond ONLY with valid JSON (no markdown):
                     {d.sleep?.hours     && <div className="history-row"><span className="history-key">💤 Sleep</span><span className="history-val">{d.sleep.hours}h · Score {d.sleep.quality||"—"}/100{d.sleep.hrv?` · HRV ${d.sleep.hrv}ms`:""}{d.sleep.restingHR?` · ${d.sleep.restingHR}bpm`:""}</span></div>}
                     {d.bodyweight?.value && <div className="history-row"><span className="history-key">⚖️ Weight</span><span className="history-val">{d.bodyweight.value} {bwUnit}</span></div>}
                     {d.workout?.type    && <div className="history-row"><span className="history-key">🏋️ Workout</span><span className="history-val">{d.workout.type.split("—")[1]?.trim()} · {d.workout.duration}min</span></div>}
-                    {d.meditation?.duration && <div className="history-row"><span className="history-key">🧘 Meditation</span><span className="history-val">{d.meditation.duration}min · {d.meditation.style}</span></div>}
+                    {d.meditation?.sessions?.length>0 && <div className="history-row"><span className="history-key">🧘 Meditation</span><span className="history-val">{d.meditation.sessions.length} session{d.meditation.sessions.length!==1?"s":""} · {d.meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0)}min</span></div>}
                     {d.cannabis?.sessions?.length>0 && <div className="history-row"><span className="history-key">🌿 Cannabis</span><span className="history-val">{d.cannabis.sessions.length} session{d.cannabis.sessions.length!==1?"s":""} · {d.cannabis.sessions.reduce((t,s)=>t+(parseFloat(s.grams)||0),0).toFixed(2)}g</span></div>}
                   </div>
                 );
@@ -807,23 +809,60 @@ Respond ONLY with valid JSON (no markdown):
                   <div className="section-icon" style={{background:"rgba(16,185,129,0.15)"}}>🧘</div>
                   <div>
                     <div className="section-name" style={{color:"#34d399"}}>MEDITATION</div>
-                    <div className="section-meta">{meditation.duration?`${meditation.duration}min · ${meditation.style||"—"}` : "Not logged"}</div>
+                    <div className="section-meta">
+                      {meditation.sessions?.length
+                        ? `${meditation.sessions.length} session${meditation.sessions.length!==1?"s":""} · ${meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0)}min total`
+                        : "Not logged"}
+                    </div>
                   </div>
                 </div>
                 <div className="section-toggle">{sections.meditation?"−":"+"}</div>
               </div>
               {sections.meditation && (
                 <div className="section-body">
-                  <div className="field-row" style={{gridTemplateColumns:"1fr 1fr"}}>
-                    <div className="field"><div className="field-label">Duration (min)</div><input type="number" min="0" placeholder="20" value={meditation.duration} onChange={e=>setMeditation({...meditation,duration:e.target.value})}/></div>
-                    <div className="field"><div className="field-label">Style</div>
-                      <select value={meditation.style} onChange={e=>setMeditation({...meditation,style:e.target.value})}>
-                        <option value="">Select style</option>
+                  {/* Running total */}
+                  {meditation.sessions?.length>0 && (
+                    <div className="total-bar" style={{borderColor:"rgba(52,211,153,0.2)",background:"rgba(52,211,153,0.07)"}}>
+                      <div><div className="total-label">TOTAL TODAY</div><div className="total-value" style={{color:"#34d399"}}>{meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0)}<span style={{fontSize:12,color:"var(--text3)",marginLeft:4}}>min</span></div></div>
+                      <div style={{textAlign:"right"}}>
+                        <div className="total-label">SESSIONS</div>
+                        <div style={{fontFamily:"var(--mono)",fontSize:20,fontWeight:700,color:"#34d399"}}>{meditation.sessions.length}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Session list */}
+                  {meditation.sessions?.length>0 && (
+                    <div className="session-list">
+                      {meditation.sessions.map((s,i)=>(
+                        <div className="session-item" key={i}>
+                          <span className="session-method">#{i+1} · {s.style}</span>
+                          <span className="session-grams" style={{color:"#34d399"}}>{s.duration}min</span>
+                          <button className="set-del" onClick={()=>setMeditation(m=>({...m,sessions:m.sessions.filter((_,idx)=>idx!==i)}))}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add session */}
+                  <div className="add-session-row">
+                    <div className="field">
+                      <div className="field-label">Style</div>
+                      <select value={newMedSession.style} onChange={e=>setNewMedSession({...newMedSession,style:e.target.value})}>
                         {MEDITATION_STYLES.map(s=><option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
+                    <div className="field">
+                      <div className="field-label">Duration (min)</div>
+                      <input type="number" min="0" placeholder="20" value={newMedSession.duration} onChange={e=>setNewMedSession({...newMedSession,duration:e.target.value})}/>
+                    </div>
+                    <button className="add-set-btn" style={{marginBottom:1,padding:"8px 14px",fontSize:11}} onClick={()=>{
+                      if(!newMedSession.duration) return;
+                      setMeditation(m=>({...m,sessions:[...(m.sessions||[]),{style:newMedSession.style,duration:newMedSession.duration,time:new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}]}));
+                      setNewMedSession({style:newMedSession.style,duration:""});
+                    }}>+ ADD</button>
                   </div>
-                  <div className="field"><div className="field-label">Notes</div><textarea placeholder="Mental state, focus level, insights..." value={meditation.notes} onChange={e=>setMeditation({...meditation,notes:e.target.value})}/></div>
+
                   <button className={`section-save-btn ${savedSection.meditation?"saved":""}`} onClick={()=>handleSaveSection("meditation")} disabled={savedSection.meditation}>{savedSection.meditation?"✓ SAVED":"SAVE MEDITATION"}</button>
                 </div>
               )}
@@ -935,7 +974,7 @@ Respond ONLY with valid JSON (no markdown):
                     {icon:"💤",label:"SLEEP LOGGED",    count:Object.keys(history).filter(k=>history[k]?.sleep?.hours).length},
                     {icon:"⚖️",label:"WEIGHT LOGGED",   count:Object.keys(history).filter(k=>history[k]?.bodyweight?.value).length},
                     {icon:"🏋️",label:"WORKOUTS LOGGED", count:Object.keys(history).filter(k=>history[k]?.workout?.type).length},
-                    {icon:"🧘",label:"MEDITATIONS",     count:Object.keys(history).filter(k=>history[k]?.meditation?.duration).length},
+                    {icon:"🧘",label:"MEDITATIONS",     count:Object.keys(history).filter(k=>history[k]?.meditation?.sessions?.length>0).length},
                     {icon:"🌿",label:"CANNABIS LOGGED", count:Object.keys(history).filter(k=>history[k]?.cannabis?.sessions?.length>0).length},
                   ].map(s=>(
                     <div key={s.label} style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
