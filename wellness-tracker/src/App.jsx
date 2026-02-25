@@ -289,7 +289,14 @@ export default function App() {
         if (d.sleep)      setSleep(d.sleep);
         if (d.bodyweight) setBodyweight(d.bodyweight);
         if (d.workout)    setWorkout(d.workout);
-        if (d.meditation) setMeditation(d.meditation);
+        if (d.meditation) {
+          // migrate old single-session format { duration, style, notes } to new sessions array
+          if (d.meditation.sessions) {
+            setMeditation(d.meditation);
+          } else if (d.meditation.duration) {
+            setMeditation({ sessions: [{ style: d.meditation.style || "Mindfulness", duration: d.meditation.duration, time: "" }] });
+          }
+        }
         if (d.cannabis)   setCannabis(d.cannabis);
       }
       setDbLoading(false);
@@ -343,7 +350,11 @@ TODAY (${getTodayKey()}):
 - Workout: ${workout.type||"none"}, ${workout.duration}min, Intensity: ${workout.intensity}/10${workout.notes?`, Notes: ${workout.notes}`:""}
 - Meditation: ${meditation.sessions?.length ? `${meditation.sessions.length} session(s), ${meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0)}min total (${meditation.sessions.map(s=>`${s.duration}min ${s.style}`).join(", ")})` : "none"}
 HISTORY (last ${hist7.length} days):
-${hist7.map(e=>`${e.date}: sleep ${e.sleep?.hours}h (score ${e.sleep?.quality||"?"}/100, HRV ${e.sleep?.hrv||"?"}ms, RHR ${e.sleep?.restingHR||"?"}bpm), bw ${e.bodyweight?.value||"?"}${bwUnit}, workout ${e.workout?.type} ${e.workout?.duration}min, meditation ${e.meditation?.sessions?.reduce((t,s)=>t+(parseInt(s.duration)||0),0)||0}min`).join("\n")||"No history yet"}
+${hist7.map(e=>{
+      const med = e.meditation;
+      const medMin = med?.sessions ? med.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0) : (med?.duration ? parseInt(med.duration) : 0);
+      return `${e.date}: sleep ${e.sleep?.hours}h (score ${e.sleep?.quality||"?"}/100, HRV ${e.sleep?.hrv||"?"}ms, RHR ${e.sleep?.restingHR||"?"}bpm), bw ${e.bodyweight?.value||"?"}${bwUnit}, workout ${e.workout?.type} ${e.workout?.duration}min, meditation ${medMin}min`;
+    }).join("\n")||"No history yet"}
 
 Respond ONLY with valid JSON (no markdown):
 {"readiness":{"score":number,"label":"Optimal/Good/Moderate/Low/Rest Day","summary":"1-2 sentences"},"tips":[{"icon":"emoji","category":"string","text":"specific tip with numbers"}],"patterns":"2-3 sentences","tomorrow":"1-2 sentences"}`;
@@ -408,7 +419,11 @@ Respond ONLY with valid JSON (no markdown):
   ], [trendDays, bwUnit]);
 
   const workoutBars    = useMemo(() => trendDays.map(([date,d])=>({ label:date.slice(5), value:d.workout?.duration?parseInt(d.workout.duration):0 })), [trendDays]);
-  const meditationBars = useMemo(() => trendDays.map(([date,d])=>({ label:date.slice(5), value: d.meditation?.sessions?.reduce((t,s)=>t+(parseInt(s.duration)||0),0)||0 })), [trendDays]);
+  const meditationBars = useMemo(() => trendDays.map(([date,d])=>{
+    const med = d.meditation;
+    const val = med?.sessions ? med.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0) : (med?.duration ? parseInt(med.duration) : 0);
+    return { label:date.slice(5), value: val };
+  }), [trendDays]);
 
   const allExercises = useMemo(() => {
     const s = new Set();
@@ -481,7 +496,7 @@ Respond ONLY with valid JSON (no markdown):
                     {d.sleep?.hours     && <div className="history-row"><span className="history-key">💤 Sleep</span><span className="history-val">{d.sleep.hours}h · Score {d.sleep.quality||"—"}/100{d.sleep.hrv?` · HRV ${d.sleep.hrv}ms`:""}{d.sleep.restingHR?` · ${d.sleep.restingHR}bpm`:""}</span></div>}
                     {d.bodyweight?.value && <div className="history-row"><span className="history-key">⚖️ Weight</span><span className="history-val">{d.bodyweight.value} {bwUnit}</span></div>}
                     {d.workout?.type    && <div className="history-row"><span className="history-key">🏋️ Workout</span><span className="history-val">{d.workout.type.split("—")[1]?.trim()} · {d.workout.duration}min</span></div>}
-                    {d.meditation?.sessions?.length>0 && <div className="history-row"><span className="history-key">🧘 Meditation</span><span className="history-val">{d.meditation.sessions.length} session{d.meditation.sessions.length!==1?"s":""} · {d.meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0)}min</span></div>}
+                    {(d.meditation?.sessions?.length>0 || d.meditation?.duration) && <div className="history-row"><span className="history-key">🧘 Meditation</span><span className="history-val">{d.meditation.sessions ? `${d.meditation.sessions.length} session${d.meditation.sessions.length!==1?"s":""} · ${d.meditation.sessions.reduce((t,s)=>t+(parseInt(s.duration)||0),0)}min` : `${d.meditation.duration}min · ${d.meditation.style}`}</span></div>}
                     {d.cannabis?.sessions?.length>0 && <div className="history-row"><span className="history-key">🌿 Cannabis</span><span className="history-val">{d.cannabis.sessions.length} session{d.cannabis.sessions.length!==1?"s":""} · {d.cannabis.sessions.reduce((t,s)=>t+(parseFloat(s.grams)||0),0).toFixed(2)}g</span></div>}
                   </div>
                 );
@@ -974,7 +989,7 @@ Respond ONLY with valid JSON (no markdown):
                     {icon:"💤",label:"SLEEP LOGGED",    count:Object.keys(history).filter(k=>history[k]?.sleep?.hours).length},
                     {icon:"⚖️",label:"WEIGHT LOGGED",   count:Object.keys(history).filter(k=>history[k]?.bodyweight?.value).length},
                     {icon:"🏋️",label:"WORKOUTS LOGGED", count:Object.keys(history).filter(k=>history[k]?.workout?.type).length},
-                    {icon:"🧘",label:"MEDITATIONS",     count:Object.keys(history).filter(k=>history[k]?.meditation?.sessions?.length>0).length},
+                    {icon:"🧘",label:"MEDITATIONS",     count:Object.keys(history).filter(k=>history[k]?.meditation?.sessions?.length>0 || history[k]?.meditation?.duration).length},
                     {icon:"🌿",label:"CANNABIS LOGGED", count:Object.keys(history).filter(k=>history[k]?.cannabis?.sessions?.length>0).length},
                   ].map(s=>(
                     <div key={s.label} style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
