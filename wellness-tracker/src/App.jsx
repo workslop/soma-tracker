@@ -206,7 +206,7 @@ export default function App() {
   const [aiLoading, setAiLoading] = useState(false);
   const [savedSection, setSavedSection] = useState({});
 
-  const [sleep, setSleep] = useState({ hours: "", quality: 0, notes: "" });
+  const [sleep, setSleep] = useState({ hours: "", quality: 0, timeToSleep: "", deepSleep: "", remSleep: "", restingHR: "", hrv: "", notes: "" });
   const [bodyweight, setBodyweight] = useState({ value: "", notes: "" });
   const [workout, setWorkout] = useState({ type: "", duration: "", intensity: 5, notes: "", sets: {} });
   const [meditation, setMeditation] = useState({ duration: "", style: "", notes: "" });
@@ -258,13 +258,13 @@ export default function App() {
       const prompt = `You are a precision wellness coach analyzing biometric and lifestyle data. Be data-driven, specific, and actionable.
 
 TODAY'S DATA (${getTodayKey()}):
-- Sleep: ${sleep.hours}h, Quality: ${sleep.quality}/5 stars${sleep.notes ? `, Notes: ${sleep.notes}` : ""}
+- Sleep: ${sleep.hours}h total, Deep: ${sleep.deepSleep || "?"}h, REM: ${sleep.remSleep || "?"}h, Time to sleep: ${sleep.timeToSleep || "?"}min, Resting HR: ${sleep.restingHR || "?"}bpm, HRV: ${sleep.hrv || "?"}ms, Eight Sleep Score: ${sleep.quality || "?"}  /100${sleep.notes ? `, Notes: ${sleep.notes}` : ""}
 - Bodyweight: ${bodyweight.value ? `${bodyweight.value} ${bwUnit}` : "not logged"}${bodyweight.notes ? `, Notes: ${bodyweight.notes}` : ""}
 - Workout: ${workout.type || "none"}, ${workout.duration}min, Intensity: ${workout.intensity}/10${workout.notes ? `, Notes: ${workout.notes}` : ""}
 - Meditation: ${meditation.duration}min ${meditation.style}${meditation.notes ? `, Notes: ${meditation.notes}` : ""}
 
 RECENT HISTORY (last ${histEntries.length} days):
-${histEntries.map(e => `${e.date}: sleep ${e.sleep?.hours}h, bodyweight ${e.bodyweight?.value || "?"}${bwUnit}, workout ${e.workout?.type} ${e.workout?.duration}min, meditation ${e.meditation?.duration}min`).join("\n") || "No history yet"}
+${histEntries.map(e => `${e.date}: sleep ${e.sleep?.hours}h (HRV ${e.sleep?.hrv || "?"}ms, RHR ${e.sleep?.restingHR || "?"}bpm), bodyweight ${e.bodyweight?.value || "?"}${bwUnit}, workout ${e.workout?.type} ${e.workout?.duration}min, meditation ${e.meditation?.duration}min`).join("\n") || "No history yet"}
 
 Respond ONLY with a JSON object (no markdown, no backticks) with this exact structure:
 {
@@ -386,7 +386,7 @@ Generate 3-5 highly specific tips based on the actual data. Reference specific n
                   return (
                     <div className="history-card" key={date}>
                       <div className="history-date">{date} — Readiness: {r.overall}%</div>
-                      {d.sleep?.hours && <div className="history-row"><span className="history-key">💤 Sleep</span><span className="history-val">{d.sleep.hours}h · ⭐{d.sleep.quality}/5</span></div>}
+                      {d.sleep?.hours && <div className="history-row"><span className="history-key">💤 Sleep</span><span className="history-val">{d.sleep.hours}h · Score {d.sleep.quality || "—"}/100{d.sleep.hrv ? ` · HRV ${d.sleep.hrv}ms` : ""}{d.sleep.restingHR ? ` · ${d.sleep.restingHR}bpm` : ""}</span></div>}
                       {d.bodyweight?.value && <div className="history-row"><span className="history-key">⚖️ Weight</span><span className="history-val">{d.bodyweight.value} {bwUnit}</span></div>}
                       {d.workout?.type && <div className="history-row"><span className="history-key">🏋️ Workout</span><span className="history-val">{d.workout.type.split("—")[1]?.trim()} · {d.workout.duration}min</span></div>}
                       {d.meditation?.duration && <div className="history-row"><span className="history-key">🧘 Meditation</span><span className="history-val">{d.meditation.duration}min · {d.meditation.style}</span></div>}
@@ -439,25 +439,48 @@ Generate 3-5 highly specific tips based on the actual data. Reference specific n
                     <div className="section-icon" style={{ background: "rgba(124,58,237,0.15)" }}>💤</div>
                     <div>
                       <div className="section-name" style={{ color: "#a78bfa" }}>SLEEP</div>
-                      <div className="section-meta">{sleep.hours ? `${sleep.hours}h · ⭐ ${sleep.quality}/5` : "Not logged"}</div>
+                      <div className="section-meta">{sleep.hours ? `${sleep.hours}h · Score ${sleep.quality || "—"}/100${sleep.hrv ? ` · HRV ${sleep.hrv}ms` : ""}${sleep.restingHR ? ` · ${sleep.restingHR}bpm` : ""}` : "Not logged"}</div>
                     </div>
                   </div>
                   <div className="section-toggle">{sections.sleep ? "−" : "+"}</div>
                 </div>
                 {sections.sleep && (
                   <div className="section-body">
+                    {/* Row 1: Hours + Sleep Score */}
                     <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr" }}>
                       <div className="field">
-                        <div className="field-label">Hours Slept</div>
+                        <div className="field-label">Total Sleep (hrs)</div>
                         <input type="number" min="0" max="24" step="0.5" placeholder="7.5" value={sleep.hours} onChange={e => setSleep({ ...sleep, hours: e.target.value })} />
                       </div>
                       <div className="field">
-                        <div className="field-label">Quality</div>
-                        <div className="stars">
-                          {[1,2,3,4,5].map(n => (
-                            <span key={n} className={`star ${sleep.quality >= n ? "active" : ""}`} onClick={() => setSleep({ ...sleep, quality: n })}>★</span>
-                          ))}
-                        </div>
+                        <div className="field-label">Sleep Score (0–100)</div>
+                        <input type="number" min="0" max="100" placeholder="82" value={sleep.quality} onChange={e => setSleep({ ...sleep, quality: e.target.value })} />
+                      </div>
+                    </div>
+                    {/* Row 2: Deep Sleep + REM */}
+                    <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                      <div className="field">
+                        <div className="field-label">Deep Sleep (hrs)</div>
+                        <input type="number" min="0" max="12" step="0.1" placeholder="1.5" value={sleep.deepSleep} onChange={e => setSleep({ ...sleep, deepSleep: e.target.value })} />
+                      </div>
+                      <div className="field">
+                        <div className="field-label">REM Sleep (hrs)</div>
+                        <input type="number" min="0" max="12" step="0.1" placeholder="2.0" value={sleep.remSleep} onChange={e => setSleep({ ...sleep, remSleep: e.target.value })} />
+                      </div>
+                    </div>
+                    {/* Row 3: Time to Sleep + Resting HR + HRV */}
+                    <div className="field-row" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+                      <div className="field">
+                        <div className="field-label">Time to Sleep (min)</div>
+                        <input type="number" min="0" placeholder="15" value={sleep.timeToSleep} onChange={e => setSleep({ ...sleep, timeToSleep: e.target.value })} />
+                      </div>
+                      <div className="field">
+                        <div className="field-label">Resting HR (bpm)</div>
+                        <input type="number" min="0" placeholder="58" value={sleep.restingHR} onChange={e => setSleep({ ...sleep, restingHR: e.target.value })} />
+                      </div>
+                      <div className="field">
+                        <div className="field-label">HRV (ms)</div>
+                        <input type="number" min="0" placeholder="65" value={sleep.hrv} onChange={e => setSleep({ ...sleep, hrv: e.target.value })} />
                       </div>
                     </div>
                     <div className="field">
