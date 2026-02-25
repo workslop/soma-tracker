@@ -25,6 +25,7 @@ export async function loadHistory() {
       bodyweight: row.bodyweight,
       workout: row.workout,
       meditation: row.meditation,
+      cannabis: row.cannabis,
     }
   })
   return history
