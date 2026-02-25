@@ -145,6 +145,16 @@ const STYLES = `
   .no-data { font-family: var(--mono); font-size: 11px; color: var(--text3); padding: 24px 0; text-align: center; }
   .chart-sub { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.08em; margin-bottom: 8px; }
 
+  /* CANNABIS */
+  .session-list { display: flex; flex-direction: column; gap: 6px; }
+  .session-item { display: grid; grid-template-columns: 1fr 1fr 28px; gap: 8px; align-items: center; background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .session-method { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+  .session-grams { font-family: var(--mono); font-size: 11px; color: #10b981; text-align: right; }
+  .total-bar { display: flex; align-items: center; justify-content: space-between; background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.2); border-radius: 6px; padding: 10px 14px; }
+  .total-label { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.1em; }
+  .total-value { font-family: var(--mono); font-size: 20px; font-weight: 700; color: #10b981; }
+  .add-session-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: flex-end; }
+
   .empty-state { text-align: center; padding: 40px; color: var(--text3); font-family: var(--mono); font-size: 12px; }
   .loading-state { display: flex; align-items: center; justify-content: center; min-height: 200px; font-family: var(--mono); font-size: 12px; color: var(--text3); }
 
@@ -249,7 +259,7 @@ function BarChart({ bars, height = 120, color = "#00e5ff" }) {
 
 export default function App() {
   const [view, setView] = useState("today");
-  const [sections, setSections] = useState({ sleep: true, bodyweight: true, workout: true, meditation: true });
+  const [sections, setSections] = useState({ sleep: true, bodyweight: true, workout: true, meditation: true, cannabis: true });
   const [bwUnit, setBwUnit] = useState(() => localStorage.getItem("bwUnit") || "lbs");
   const [history, setHistory] = useState({});
   const [dbLoading, setDbLoading] = useState(true);
@@ -262,6 +272,8 @@ export default function App() {
   const [bodyweight, setBodyweight] = useState({ value:"", notes:"" });
   const [workout, setWorkout] = useState({ type:"", duration:"", intensity:5, notes:"", sets:{} });
   const [meditation, setMeditation] = useState({ duration:"", style:"", notes:"" });
+  const [cannabis, setCannabis] = useState({ sessions: [] });
+  const [newSession, setNewSession] = useState({ method:"Vape", grams:"" });
 
   useEffect(() => {
     async function load() {
@@ -275,6 +287,7 @@ export default function App() {
         if (d.bodyweight) setBodyweight(d.bodyweight);
         if (d.workout)    setWorkout(d.workout);
         if (d.meditation) setMeditation(d.meditation);
+        if (d.cannabis)   setCannabis(d.cannabis);
       }
       setDbLoading(false);
     }
@@ -306,14 +319,14 @@ export default function App() {
 
   const handleSaveSection = useCallback(async (sectionName) => {
     const todayKey = getTodayKey();
-    const sectionData = { sleep, workout, meditation, bodyweight }[sectionName];
+    const sectionData = { sleep, workout, meditation, bodyweight, cannabis }[sectionName];
     const success = await saveSectionToDb(todayKey, sectionName, sectionData);
     if (success) {
       setHistory(prev => ({ ...prev, [todayKey]: { ...(prev[todayKey]||{}), [sectionName]: sectionData } }));
       setSavedSection(prev => ({ ...prev, [sectionName]: true }));
       setTimeout(() => setSavedSection(prev => ({ ...prev, [sectionName]: false })), 2000);
     }
-  }, [sleep, workout, meditation, bodyweight]);
+  }, [sleep, workout, meditation, bodyweight, cannabis]);
 
   const analyzeWithAI = useCallback(async () => {
     setAiLoading(true); setAiInsights(null);
@@ -467,6 +480,7 @@ Respond ONLY with valid JSON (no markdown):
                     {d.bodyweight?.value && <div className="history-row"><span className="history-key">⚖️ Weight</span><span className="history-val">{d.bodyweight.value} {bwUnit}</span></div>}
                     {d.workout?.type    && <div className="history-row"><span className="history-key">🏋️ Workout</span><span className="history-val">{d.workout.type.split("—")[1]?.trim()} · {d.workout.duration}min</span></div>}
                     {d.meditation?.duration && <div className="history-row"><span className="history-key">🧘 Meditation</span><span className="history-val">{d.meditation.duration}min · {d.meditation.style}</span></div>}
+                    {d.cannabis?.sessions?.length>0 && <div className="history-row"><span className="history-key">🌿 Cannabis</span><span className="history-val">{d.cannabis.sessions.length} session{d.cannabis.sessions.length!==1?"s":""} · {d.cannabis.sessions.reduce((t,s)=>t+(parseFloat(s.grams)||0),0).toFixed(2)}g</span></div>}
                   </div>
                 );
               })}
@@ -815,6 +829,75 @@ Respond ONLY with valid JSON (no markdown):
               )}
             </div>
 
+            {/* CANNABIS */}
+            <div className="section-card">
+              <div className="section-header" onClick={()=>toggleSection("cannabis")}>
+                <div className="section-title-row">
+                  <div className="section-icon" style={{background:"rgba(16,185,129,0.12)"}}>🌿</div>
+                  <div>
+                    <div className="section-name" style={{color:"#10b981"}}>CANNABIS</div>
+                    <div className="section-meta">
+                      {cannabis.sessions?.length
+                        ? `${cannabis.sessions.length} session${cannabis.sessions.length!==1?"s":""} · ${cannabis.sessions.reduce((t,s)=>t+(parseFloat(s.grams)||0),0).toFixed(2)}g total`
+                        : "Not logged"}
+                    </div>
+                  </div>
+                </div>
+                <div className="section-toggle">{sections.cannabis?"−":"+"}</div>
+              </div>
+              {sections.cannabis && (
+                <div className="section-body">
+                  {/* Running total */}
+                  {cannabis.sessions?.length>0 && (
+                    <div className="total-bar">
+                      <div><div className="total-label">TOTAL TODAY</div><div className="total-value">{cannabis.sessions.reduce((t,s)=>t+(parseFloat(s.grams)||0),0).toFixed(2)}<span style={{fontSize:12,color:"var(--text3)",marginLeft:4}}>g</span></div></div>
+                      <div style={{textAlign:"right"}}>
+                        <div className="total-label">SESSIONS</div>
+                        <div style={{fontFamily:"var(--mono)",fontSize:20,fontWeight:700,color:"#10b981"}}>{cannabis.sessions.length}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Session list */}
+                  {cannabis.sessions?.length>0 && (
+                    <div className="session-list">
+                      {cannabis.sessions.map((s,i)=>(
+                        <div className="session-item" key={i}>
+                          <span className="session-method">#{i+1} · {s.method}</span>
+                          <span className="session-grams">{s.grams}g</span>
+                          <button className="set-del" onClick={()=>setCannabis(c=>({...c,sessions:c.sessions.filter((_,idx)=>idx!==i)}))}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add session */}
+                  <div className="add-session-row">
+                    <div className="field">
+                      <div className="field-label">Method</div>
+                      <select value={newSession.method} onChange={e=>setNewSession({...newSession,method:e.target.value})}>
+                        <option>Vape</option>
+                        <option>Bong</option>
+                      </select>
+                    </div>
+                    <div className="field">
+                      <div className="field-label">Grams</div>
+                      <input type="number" min="0" step="0.01" placeholder="0.25" value={newSession.grams} onChange={e=>setNewSession({...newSession,grams:e.target.value})}/>
+                    </div>
+                    <button className="add-set-btn" style={{marginBottom:1,padding:"8px 14px",fontSize:11}} onClick={()=>{
+                      if(!newSession.grams) return;
+                      setCannabis(c=>({...c,sessions:[...(c.sessions||[]),{method:newSession.method,grams:newSession.grams,time:new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}]}));
+                      setNewSession({method:newSession.method,grams:""});
+                    }}>+ ADD</button>
+                  </div>
+
+                  <button className={`section-save-btn ${savedSection.cannabis?"saved":""}`} onClick={()=>handleSaveSection("cannabis")} disabled={savedSection.cannabis}>
+                    {savedSection.cannabis?"✓ SAVED":"SAVE CANNABIS"}
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* RIGHT: AI */}
@@ -853,6 +936,7 @@ Respond ONLY with valid JSON (no markdown):
                     {icon:"⚖️",label:"WEIGHT LOGGED",   count:Object.keys(history).filter(k=>history[k]?.bodyweight?.value).length},
                     {icon:"🏋️",label:"WORKOUTS LOGGED", count:Object.keys(history).filter(k=>history[k]?.workout?.type).length},
                     {icon:"🧘",label:"MEDITATIONS",     count:Object.keys(history).filter(k=>history[k]?.meditation?.duration).length},
+                    {icon:"🌿",label:"CANNABIS LOGGED", count:Object.keys(history).filter(k=>history[k]?.cannabis?.sessions?.length>0).length},
                   ].map(s=>(
                     <div key={s.label} style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                       <span>{s.icon} <span style={{fontSize:10,color:"var(--text3)",letterSpacing:"0.05em"}}>{s.label}</span></span>
